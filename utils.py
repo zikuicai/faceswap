@@ -5,8 +5,10 @@ import cv2
 import os
 import yaml
 
+
 def get_image_paths(directory):
     return [x.path for x in os.scandir(directory) if x.name.endswith(".jpg") or x.name.endswith(".png")]
+
 
 def load_images(image_paths, convert=None):
     iter_all_images = (cv2.resize(cv2.imread(fn), (256,256)) for fn in image_paths)
@@ -18,6 +20,7 @@ def load_images(image_paths, convert=None):
         all_images[i] = image
     return all_images
 
+
 def get_transpose_axes( n ):
     if n % 2 == 0:
         y_axes = list(range(1, n-1, 2))
@@ -27,6 +30,7 @@ def get_transpose_axes( n ):
         x_axes = list(range(1, n-1, 2))
     return y_axes, x_axes, [n-1]
 
+
 def stack_images(images):
     images_shape = np.array(images.shape)
     new_axes = get_transpose_axes(len(images_shape))
@@ -35,6 +39,7 @@ def stack_images(images):
         images,
         axes = np.concatenate(new_axes)
         ).reshape(new_shape)
+
 
 def showG(test_A, test_B, path_A, path_B, batchSize):
     figure_A = np.stack([
@@ -52,10 +57,14 @@ def showG(test_A, test_B, path_A, path_B, batchSize):
     figure = figure.reshape((4,batchSize//2) + figure.shape[1:])
     figure = stack_images(figure)
     figure = np.clip((figure + 1) * 255 / 2, 0, 255).astype('uint8')
-    figure = cv2.cvtColor(figure, cv2.COLOR_BGR2RGB)    
-    display(Image.fromarray(figure))
-    
-    
+    # figure = cv2.cvtColor(figure, cv2.COLOR_BGR2RGB)
+    # display(Image.fromarray(figure))
+    # cv2.imshow('image', figure)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+    return figure
+
+
 def showG_mask(test_A, test_B, path_A, path_B, batchSize):
     figure_A = np.stack([
         test_A,
@@ -72,8 +81,9 @@ def showG_mask(test_A, test_B, path_A, path_B, batchSize):
     figure = figure.reshape((4,batchSize//2) + figure.shape[1:])
     figure = stack_images(figure)
     figure = np.clip((figure + 1) * 255 / 2, 0, 255).astype('uint8')
-    figure = cv2.cvtColor(figure, cv2.COLOR_BGR2RGB)    
-    display(Image.fromarray(figure))
+    # figure = cv2.cvtColor(figure, cv2.COLOR_BGR2RGB)    
+    # display(Image.fromarray(figure))
+    return figure
     
     
 def showG_eyes(test_A, test_B, bm_eyes_A, bm_eyes_B, batchSize):
@@ -93,10 +103,30 @@ def showG_eyes(test_A, test_B, bm_eyes_A, bm_eyes_B, batchSize):
     figure = stack_images(figure)
     figure = np.clip(figure * 255, 0, 255).astype('uint8')
     figure = cv2.cvtColor(figure, cv2.COLOR_BGR2RGB)
-
     display(Image.fromarray(figure))
 
-    
+
+def showG_eyes_cv2(test_A, test_B, bm_eyes_A, bm_eyes_B, batchSize):
+    figure_A = np.stack([
+        (test_A + 1)/2,
+        bm_eyes_A,
+        bm_eyes_A * (test_A + 1)/2,
+        ], axis=1 )
+    figure_B = np.stack([
+        (test_B + 1)/2,
+        bm_eyes_B,
+        bm_eyes_B * (test_B+1)/2,
+        ], axis=1 )
+
+    figure = np.concatenate([figure_A, figure_B], axis=0)
+    figure = figure.reshape((4,batchSize//2) + figure.shape[1:])
+    figure = stack_images(figure)
+    figure = np.clip(figure * 255, 0, 255).astype('uint8')
+    cv2.imshow('image', figure)
+    # cv2.waitKey(0)
+    # cv2.destroyAllWindows()
+
+
 def save_preview_image(test_A, test_B, 
                        path_A, path_B, 
                        path_bgr_A, path_bgr_B,
@@ -120,11 +150,13 @@ def save_preview_image(test_A, test_B,
     figure = stack_images(figure)
     figure = np.clip((figure + 1) * 255 / 2, 0, 255).astype('uint8')
     cv2.imwrite(save_fn, figure)  
-    
+
+
 def load_yaml(path_configs):
     with open(path_configs, 'r') as f:
          return yaml.load(f)        
-        
+
+
 def show_loss_config(loss_config):
     """
     Print out loss configuration. Called in loss function automation.

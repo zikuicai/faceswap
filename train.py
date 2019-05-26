@@ -3,26 +3,83 @@ import glob
 import time
 from pathlib import Path
 
+import cv2
+import tensorflow as tf
 from keras.layers import *
 import keras.backend as K
-import tensorflow as tf
 
 from data_loader.data_loader import DataLoader
-from utils import showG, showG_mask, showG_eyes
+from utils import showG, showG_mask, showG_eyes_cv2
 from networks.faceswap_gan_model import FaceswapGANModel
 # https://github.com/rcmalli/keras-vggface
 #!pip install keras_vggface --no-dependencies
 from keras_vggface.vggface import VGGFace
 
 
-# Number of CPU cores
-num_cpus = os.cpu_count()
+def reset_session(save_path):
+    global model, vggface
+    global train_batchA, train_batchB
+    model.save_weights(path=save_path)
+    del model
+    del vggface
+    del train_batchA
+    del train_batchB
+    K.clear_session()
+    model = FaceswapGANModel(**arch_config)
+    model.load_weights(path=save_path)
+    vggface = VGGFace(include_top=False, model='resnet50', input_shape=(224, 224, 3))
+    model.build_pl_model(vggface_model=vggface, before_activ=loss_config["PL_before_activ"])
+    train_batchA = DataLoader(train_A, train_AnB, batchSize, img_dirA_bm_eyes,
+                              RESOLUTION, num_cpus, K.get_session(), **da_config)
+    train_batchB = DataLoader(train_B, train_AnB, batchSize, img_dirB_bm_eyes, 
+                              RESOLUTION, num_cpus, K.get_session(), **da_config)
 
+
+def show_loss_config(loss_config):
+    for config, value in loss_config.items():
+        print(f"{config} = {value}")
+
+
+def reconfig(stage):
+    m_mask = [0.0, 0.5, 0.2, 0.4, 0., 0.1, 0.0]
+    use_mask_hinge_loss = [False, True, True, True, False, True, False]
+    lr_factor = [1., 1., 1., 1., 0.3, 0.3, 0.1]
+
+    loss_config['use_PL'] = True
+    loss_config['use_mask_hinge_loss'] = use_mask_hinge_loss[stage]
+    loss_config['m_mask'] = m_mask[stage]
+    loss_config['lr_factor'] = lr_factor[stage]
+
+    reset_session(models_dir)
+    print("Building new loss funcitons...")
+    show_loss_config(loss_config)
+    model.build_train_functions(loss_weights=loss_weights, **loss_config)
+    print("Done.")
+
+
+def make_html(filesets,img_dir,step_count):
+    index_path = os.path.join(img_dir, "index.html")
+    if os.path.exists(index_path):
+        index = open(index_path, "a")
+    else:
+        index = open(index_path, "w")
+        index.write("<html><body><table><tr>")
+        index.write("<th>step</th><th>Transformed</th><th>Masks</th><th>Reconstruction</th></tr>")
+
+    index.write("<tr>")
+    index.write("<td>%s</td>" % step_count)
+    for kind in range(3):
+        index.write(f"<td><img src='{filesets[kind]}'></td>")
+    index.write("</tr>")
+    return index_path
+
+# ----------------------------------------- config -----------------------------------------
+
+# Number of CPU cores, for parallelism
+num_cpus = os.cpu_count()
 # Input/Output resolution
 RESOLUTION = 64 # 64x64, 128x128, 256x256
 assert (RESOLUTION % 64) == 0, "RESOLUTION should be 64, 128, or 256."
-
-# Batch size
 batchSize = 8
 assert (batchSize != 1 and batchSize % 2 == 0) , "batchSize should be an even number."
 
@@ -51,6 +108,16 @@ img_dirB_bm_eyes = "../data/binary_masks/faceB_eyes"
 
 # Path to saved model weights
 models_dir = "./models"
+img_dir = "./imgs"
+trans_dir = "./imgs/trans"
+masks_dir = "./imgs/masks"
+recon_dir = "./imgs/recon"
+# Create ./models directory
+Path(models_dir).mkdir(parents=True, exist_ok=True)
+Path(trans_dir).mkdir(parents=True, exist_ok=True)
+Path(masks_dir).mkdir(parents=True, exist_ok=True)
+Path(recon_dir).mkdir(parents=True, exist_ok=True)
+
 
 # Architecture configuration
 arch_config = {}
@@ -77,23 +144,8 @@ loss_config['m_mask'] = 0.
 loss_config['lr_factor'] = 1.
 loss_config['use_cyclic_loss'] = False
 
-## here is the model
 
-model = FaceswapGANModel(**arch_config)
-model.load_weights(path=models_dir)
-
-# VGGFace ResNet50
-vggface = VGGFace(include_top=False, model='resnet50', input_shape=(224, 224, 3))
-
-#vggface.summary()
-
-model.build_pl_model(vggface_model=vggface, before_activ=loss_config["PL_before_activ"])
-model.build_train_functions(loss_weights=loss_weights, **loss_config)
-
-
-
-# Create ./models directory
-Path(f"models").mkdir(parents=True, exist_ok=True)
+# ----------------------------------------- load data -----------------------------------------
 
 # Get filenames
 train_A = glob.glob(img_dirA+"/*.*")
@@ -115,42 +167,34 @@ if use_bm_eyes:
     "Number of faceB images does not match number of their binary masks. Can be caused by any none image file in the folder."
 
 
-def show_loss_config(loss_config):
-    for config, value in loss_config.items():
-        print(f"{config} = {value}")
+# ------ Display random binary masks of eyes -----
+# train_batchA = DataLoader(train_A, train_AnB, batchSize, img_dirA_bm_eyes, 
+#                           RESOLUTION, num_cpus, K.get_session(), **da_config)
+# train_batchB = DataLoader(train_B, train_AnB, batchSize, img_dirB_bm_eyes, 
+#                           RESOLUTION, num_cpus, K.get_session(), **da_config)
+# _, tA, bmA = train_batchA.get_next_batch()
+# _, tB, bmB = train_batchB.get_next_batch()
+# showG_eyes_cv2(tA, tB, bmA, bmB, batchSize)
+# del train_batchA, train_batchB
 
 
-# Display random binary masks of eyes
-train_batchA = DataLoader(train_A, train_AnB, batchSize, img_dirA_bm_eyes, 
-                          RESOLUTION, num_cpus, K.get_session(), **da_config)
-train_batchB = DataLoader(train_B, train_AnB, batchSize, img_dirB_bm_eyes, 
-                          RESOLUTION, num_cpus, K.get_session(), **da_config)
-_, tA, bmA = train_batchA.get_next_batch()
-_, tB, bmB = train_batchB.get_next_batch()
-# showG_eyes(tA, tB, bmA, bmB, batchSize)
-del train_batchA, train_batchB
+# ----------------------------------------- define models -----------------------------------------
+
+model = FaceswapGANModel(**arch_config)
+model.load_weights(path=models_dir)
+
+# VGGFace ResNet50
+vggface = VGGFace(include_top=False, model='resnet50', input_shape=(224, 224, 3))
+vggface.summary()
+
+model.build_pl_model(vggface_model=vggface, before_activ=loss_config["PL_before_activ"])
+model.build_train_functions(loss_weights=loss_weights, **loss_config)
 
 
-def reset_session(save_path):
-    global model, vggface
-    global train_batchA, train_batchB
-    model.save_weights(path=save_path)
-    del model
-    del vggface
-    del train_batchA
-    del train_batchB
-    K.clear_session()
-    model = FaceswapGANModel(**arch_config)
-    model.load_weights(path=save_path)
-    vggface = VGGFace(include_top=False, model='resnet50', input_shape=(224, 224, 3))
-    model.build_pl_model(vggface_model=vggface, before_activ=loss_config["PL_before_activ"])
-    train_batchA = DataLoader(train_A, train_AnB, batchSize, img_dirA_bm_eyes,
-                              RESOLUTION, num_cpus, K.get_session(), **da_config)
-    train_batchB = DataLoader(train_B, train_AnB, batchSize, img_dirB_bm_eyes, 
-                              RESOLUTION, num_cpus, K.get_session(), **da_config)
 
 
-# Start training
+# ----------------------------------------- training -----------------------------------------
+
 t0 = time.time()
 
 # This try/except is meant to resume training that was accidentally interrupted
@@ -171,29 +215,12 @@ for k in ['ttl', 'adv', 'recon', 'edge', 'pl']:
 display_iters = 300
 backup_iters = 5000
 TOTAL_ITERS = 40000
+step_count = 0
 
 train_batchA = DataLoader(train_A, train_AnB, batchSize, img_dirA_bm_eyes, 
                           RESOLUTION, num_cpus, K.get_session(), **da_config)
 train_batchB = DataLoader(train_B, train_AnB, batchSize, img_dirB_bm_eyes, 
                           RESOLUTION, num_cpus, K.get_session(), **da_config)
-
-
-def reconfig(stage):
-    m_mask = [0.0, 0.5, 0.2, 0.4, 0., 0.1, 0.0]
-    use_mask_hinge_loss = [False, True, True, True, False, True, False]
-    lr_factor = [1., 1., 1., 1., 0.3, 0.3, 0.1]
-
-    loss_config['use_PL'] = True
-    loss_config['use_mask_hinge_loss'] = use_mask_hinge_loss[stage]
-    loss_config['m_mask'] = m_mask[stage]
-    loss_config['lr_factor'] = lr_factor[stage]
-
-    reset_session(models_dir)
-    print("Building new loss funcitons...")
-    show_loss_config(loss_config)
-    model.build_train_functions(loss_weights=loss_weights, **loss_config)
-    print("Done.")
-
 
 while gen_iterations <= TOTAL_ITERS: 
     
@@ -254,20 +281,24 @@ while gen_iterations <= TOTAL_ITERS:
                 print(f'GA: {errGAs["pl"]/display_iters:.4f} GB: {errGBs["pl"]/display_iters:.4f}')
         
         # Display images
-        print("----------") 
+        print("----------")
         wA, tA, _ = train_batchA.get_next_batch()
         wB, tB, _ = train_batchB.get_next_batch()
-        # print("Transformed (masked) results:")
-        # showG(tA, tB, model.path_A, model.path_B, batchSize)   
-        # print("Masks:")
-        # showG_mask(tA, tB, model.path_mask_A, model.path_mask_B, batchSize)  
-        # print("Reconstruction results:")
-        # showG(wA, wB, model.path_bgr_A, model.path_bgr_B, batchSize)
+        img_transform = showG(tA, tB, model.path_A, model.path_B, batchSize)
+        img_masks = showG_mask(tA, tB, model.path_mask_A, model.path_mask_B, batchSize)
+        img_reconstruct = showG(wA, wB, model.path_bgr_A, model.path_bgr_B, batchSize)
+        cv2.imwrite(os.path.join(trans_dir,str(step_count))+'.jpg',img_transform)
+        cv2.imwrite(os.path.join(masks_dir,str(step_count))+'.jpg',img_masks)
+        cv2.imwrite(os.path.join(recon_dir,str(step_count))+'.jpg',img_reconstruct)
+        img_set = [f"trans/{step_count}.jpg",f"masks/{step_count}.jpg",f"recon/{step_count}.jpg"]
+        make_html(img_set,img_dir=img_dir,step_count=step_count)
+        
         errGA_sum = errGB_sum = errDA_sum = errDB_sum = 0
         for k in ['ttl', 'adv', 'recon', 'edge', 'pl']:
             errGAs[k] = 0
             errGBs[k] = 0
-        
+
+        step_count += 1
         # Save models
         model.save_weights(path=models_dir)
     
