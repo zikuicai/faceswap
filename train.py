@@ -9,7 +9,7 @@ from keras.layers import *
 import keras.backend as K
 
 from data_loader.data_loader import DataLoader
-from utils import showG, showG_mask, showG_eyes_cv2
+from utils import get_G, get_G_mask, show_loss_config, make_html
 from networks.faceswap_gan_model import FaceswapGANModel
 # https://github.com/rcmalli/keras-vggface
 #!pip install keras_vggface --no-dependencies
@@ -35,11 +35,6 @@ def reset_session(save_path):
                               RESOLUTION, num_cpus, K.get_session(), **da_config)
 
 
-def show_loss_config(loss_config):
-    for config, value in loss_config.items():
-        print(f"{config} = {value}")
-
-
 def reconfig(stage):
     m_mask = [0.0, 0.5, 0.2, 0.4, 0., 0.1, 0.0]
     use_mask_hinge_loss = [False, True, True, True, False, True, False]
@@ -56,22 +51,6 @@ def reconfig(stage):
     model.build_train_functions(loss_weights=loss_weights, **loss_config)
     print("Done.")
 
-
-def make_html(filesets,img_dir,step_count):
-    index_path = os.path.join(img_dir, "index.html")
-    if os.path.exists(index_path):
-        index = open(index_path, "a")
-    else:
-        index = open(index_path, "w")
-        index.write("<html><body><table><tr>")
-        index.write("<th>step</th><th>Transformed</th><th>Masks</th><th>Reconstruction</th></tr>")
-
-    index.write("<tr>")
-    index.write("<td>%s</td>" % step_count)
-    for kind in range(3):
-        index.write(f"<td><img src='{filesets[kind]}'></td>")
-    index.write("</tr>")
-    return index_path
 
 # ----------------------------------------- config -----------------------------------------
 
@@ -108,10 +87,10 @@ img_dirB_bm_eyes = "../data/binary_masks/faceB_eyes"
 
 # Path to saved model weights
 models_dir = "./models"
-img_dir = "./imgs"
-trans_dir = "./imgs/trans"
-masks_dir = "./imgs/masks"
-recon_dir = "./imgs/recon"
+results_dir = "./results"
+trans_dir = "./results/trans"
+masks_dir = "./results/masks"
+recon_dir = "./results/recon"
 # Create ./models directory
 Path(models_dir).mkdir(parents=True, exist_ok=True)
 Path(trans_dir).mkdir(parents=True, exist_ok=True)
@@ -167,17 +146,6 @@ if use_bm_eyes:
     "Number of faceB images does not match number of their binary masks. Can be caused by any none image file in the folder."
 
 
-# ------ Display random binary masks of eyes -----
-# train_batchA = DataLoader(train_A, train_AnB, batchSize, img_dirA_bm_eyes, 
-#                           RESOLUTION, num_cpus, K.get_session(), **da_config)
-# train_batchB = DataLoader(train_B, train_AnB, batchSize, img_dirB_bm_eyes, 
-#                           RESOLUTION, num_cpus, K.get_session(), **da_config)
-# _, tA, bmA = train_batchA.get_next_batch()
-# _, tB, bmB = train_batchB.get_next_batch()
-# showG_eyes_cv2(tA, tB, bmA, bmB, batchSize)
-# del train_batchA, train_batchB
-
-
 # ----------------------------------------- define models -----------------------------------------
 
 model = FaceswapGANModel(**arch_config)
@@ -189,8 +157,6 @@ vggface.summary()
 
 model.build_pl_model(vggface_model=vggface, before_activ=loss_config["PL_before_activ"])
 model.build_train_functions(loss_weights=loss_weights, **loss_config)
-
-
 
 
 # ----------------------------------------- training -----------------------------------------
@@ -258,7 +224,6 @@ while gen_iterations <= TOTAL_ITERS:
     
     # Visualization
     if gen_iterations % display_iters == 0:
-            
         # Display loss information
         show_loss_config(loss_config)
         print("----------") 
@@ -284,15 +249,15 @@ while gen_iterations <= TOTAL_ITERS:
         print("----------")
         wA, tA, _ = train_batchA.get_next_batch()
         wB, tB, _ = train_batchB.get_next_batch()
-        img_transform = showG(tA, tB, model.path_A, model.path_B, batchSize)
-        img_masks = showG_mask(tA, tB, model.path_mask_A, model.path_mask_B, batchSize)
-        img_reconstruct = showG(wA, wB, model.path_bgr_A, model.path_bgr_B, batchSize)
+        img_transform = get_G(tA, tB, model.path_A, model.path_B, batchSize)
+        img_masks = get_G_mask(tA, tB, model.path_mask_A, model.path_mask_B, batchSize)
+        img_reconstruct = get_G(wA, wB, model.path_bgr_A, model.path_bgr_B, batchSize)
         cv2.imwrite(os.path.join(trans_dir,str(step_count))+'.jpg',img_transform)
         cv2.imwrite(os.path.join(masks_dir,str(step_count))+'.jpg',img_masks)
         cv2.imwrite(os.path.join(recon_dir,str(step_count))+'.jpg',img_reconstruct)
         img_set = [f"trans/{step_count}.jpg",f"masks/{step_count}.jpg",f"recon/{step_count}.jpg"]
-        make_html(img_set,img_dir=img_dir,step_count=step_count)
-        
+        make_html(img_set,img_dir=results_dir,step_count=step_count)
+
         errGA_sum = errGB_sum = errDA_sum = errDB_sum = 0
         for k in ['ttl', 'adv', 'recon', 'edge', 'pl']:
             errGAs[k] = 0
@@ -307,14 +272,3 @@ while gen_iterations <= TOTAL_ITERS:
         bkup_dir = f"{models_dir}/backup_iter{gen_iterations}"
         Path(bkup_dir).mkdir(parents=True, exist_ok=True)
         model.save_weights(path=bkup_dir)
-
-# Display random results
-# wA, tA, _ = train_batchA.get_next_batch()
-# wB, tB, _ = train_batchB.get_next_batch()
-# print("Transformed (masked) results:")
-# showG(tA, tB, model.path_A, model.path_B, batchSize)
-# print("Masks:")
-# showG_mask(tA, tB, model.path_mask_A, model.path_mask_B, batchSize)  
-# print("Reconstruction results:")
-# showG(wA, wB, model.path_bgr_A, model.path_bgr_B, batchSize)
-

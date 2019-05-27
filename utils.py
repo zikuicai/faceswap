@@ -1,5 +1,3 @@
-from IPython.display import display
-from PIL import Image
 import numpy as np
 import cv2
 import os
@@ -41,7 +39,7 @@ def stack_images(images):
         ).reshape(new_shape)
 
 
-def showG(test_A, test_B, path_A, path_B, batchSize):
+def get_G(test_A, test_B, path_A, path_B, batchSize):
     figure_A = np.stack([
         test_A,
         np.squeeze(np.array([path_A([test_A[i:i+1]]) for i in range(test_A.shape[0])])),
@@ -57,15 +55,10 @@ def showG(test_A, test_B, path_A, path_B, batchSize):
     figure = figure.reshape((4,batchSize//2) + figure.shape[1:])
     figure = stack_images(figure)
     figure = np.clip((figure + 1) * 255 / 2, 0, 255).astype('uint8')
-    # figure = cv2.cvtColor(figure, cv2.COLOR_BGR2RGB)
-    # display(Image.fromarray(figure))
-    # cv2.imshow('image', figure)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
     return figure
 
 
-def showG_mask(test_A, test_B, path_A, path_B, batchSize):
+def get_G_mask(test_A, test_B, path_A, path_B, batchSize):
     figure_A = np.stack([
         test_A,
         (np.squeeze(np.array([path_A([test_A[i:i+1]]) for i in range(test_A.shape[0])])))*2-1,
@@ -81,50 +74,36 @@ def showG_mask(test_A, test_B, path_A, path_B, batchSize):
     figure = figure.reshape((4,batchSize//2) + figure.shape[1:])
     figure = stack_images(figure)
     figure = np.clip((figure + 1) * 255 / 2, 0, 255).astype('uint8')
-    # figure = cv2.cvtColor(figure, cv2.COLOR_BGR2RGB)    
-    # display(Image.fromarray(figure))
     return figure
+
+
+def show_loss_config(loss_config):
+    """
+    Print out loss configuration. Called in loss function automation.
     
-    
-def showG_eyes(test_A, test_B, bm_eyes_A, bm_eyes_B, batchSize):
-    figure_A = np.stack([
-        (test_A + 1)/2,
-        bm_eyes_A,
-        bm_eyes_A * (test_A + 1)/2,
-        ], axis=1 )
-    figure_B = np.stack([
-        (test_B + 1)/2,
-        bm_eyes_B,
-        bm_eyes_B * (test_B+1)/2,
-        ], axis=1 )
-
-    figure = np.concatenate([figure_A, figure_B], axis=0)
-    figure = figure.reshape((4,batchSize//2) + figure.shape[1:])
-    figure = stack_images(figure)
-    figure = np.clip(figure * 255, 0, 255).astype('uint8')
-    figure = cv2.cvtColor(figure, cv2.COLOR_BGR2RGB)
-    display(Image.fromarray(figure))
+    Argument:
+        loss_config: A dictionary. Configuration regarding the optimization.
+    """
+    for config, value in loss_config.items():
+        print(f"{config} = {value}")
 
 
-def showG_eyes_cv2(test_A, test_B, bm_eyes_A, bm_eyes_B, batchSize):
-    figure_A = np.stack([
-        (test_A + 1)/2,
-        bm_eyes_A,
-        bm_eyes_A * (test_A + 1)/2,
-        ], axis=1 )
-    figure_B = np.stack([
-        (test_B + 1)/2,
-        bm_eyes_B,
-        bm_eyes_B * (test_B+1)/2,
-        ], axis=1 )
+def make_html(filesets,img_dir,step_count):
+    # this function makes a HTML file showing all the generated images in a webpage
+    index_path = os.path.join(img_dir, "index.html")
+    if os.path.exists(index_path):
+        index = open(index_path, "a")
+    else:
+        index = open(index_path, "w")
+        index.write("<html><body><table><tr>")
+        index.write("<th>step</th><th>Transformed</th><th>Masks</th><th>Reconstruction</th></tr>")
 
-    figure = np.concatenate([figure_A, figure_B], axis=0)
-    figure = figure.reshape((4,batchSize//2) + figure.shape[1:])
-    figure = stack_images(figure)
-    figure = np.clip(figure * 255, 0, 255).astype('uint8')
-    cv2.imshow('image', figure)
-    # cv2.waitKey(0)
-    # cv2.destroyAllWindows()
+    index.write("<tr>")
+    index.write("<td>%s</td>" % step_count)
+    for kind in range(3):
+        index.write(f"<td><img src='{filesets[kind]}'></td>")
+    index.write("</tr>")
+    return index_path
 
 
 def save_preview_image(test_A, test_B, 
@@ -157,12 +136,5 @@ def load_yaml(path_configs):
          return yaml.load(f)        
 
 
-def show_loss_config(loss_config):
-    """
-    Print out loss configuration. Called in loss function automation.
-    
-    Argument:
-        loss_config: A dictionary. Configuration regarding the optimization.
-    """
-    for config, value in loss_config.items():
-        print(f"{config} = {value}")
+
+

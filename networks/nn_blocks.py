@@ -1,12 +1,12 @@
 from keras.layers import *
 from keras.layers.advanced_activations import LeakyReLU
+import keras.backend as K
+import tensorflow as tf
 from .instance_normalization import InstanceNormalization
 from .GroupNormalization import GroupNormalization
 from .pixel_shuffler import PixelShuffler
 from .custom_layers.scale_layer import Scale
 from .custom_inits.icnr_initializer import icnr_keras
-import tensorflow as tf
-import keras.backend as K
 
 # initializers and weight decay regularization are fixed
 conv_init = 'he_normal'

@@ -106,7 +106,7 @@ def perceptual_loss(real, fake_abgr, distorted, mask_eyes, vggface_feats, **weig
     def preprocess_vggface(x):
         x = (x + 1)/2 * 255 # channel order: BGR
         x -= [91.4953, 103.8827, 131.0912]
-        return x    
+        return x
     
     real_sz224 = tf.image.resize_images(real, [224, 224])
     real_sz224 = Lambda(preprocess_vggface)(real_sz224)

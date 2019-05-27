@@ -1,8 +1,10 @@
 from keras.models import Model
-from keras.layers import *
+from keras.layers import Input, Conv2D, Dense, Flatten, Reshape, Lambda, concatenate
 from keras.optimizers import Adam
-from .nn_blocks import *
-from .losses import *
+import keras.backend as K
+from .nn_blocks import conv_block, conv_block_d, self_attn_block, upscale_nn, upscale_ps, res_block
+from .losses import adversarial_loss, reconstruction_loss, edge_loss, perceptual_loss, cyclic_loss, first_order
+
 
 class FaceswapGANModel():
     """
@@ -136,7 +138,7 @@ class FaceswapGANModel():
         bgr = Conv2D(3, kernel_size=5, padding='same', activation="tanh")(x)
         out = concatenate([alpha, bgr])
         outputs.append(out)
-        return Model(inp, outputs)
+        return Model(inputs=inp, outputs=outputs)
     
     @staticmethod
     def build_discriminator(nc_in, 
@@ -302,7 +304,7 @@ class FaceswapGANModel():
         except:
             print ("Error occurs during saving weights.")
             pass
-        
+    
     def train_one_batch_G(self, data_A, data_B):
         if len(data_A) == 4 and len(data_B) == 4:
             _, warped_A, target_A, bm_eyes_A = data_A
