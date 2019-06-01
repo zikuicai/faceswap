@@ -1,5 +1,5 @@
 import tensorflow as tf
-from .data_augmentation import *
+from .data_augmentation import read_image
 
 
 class DataLoader(object):
@@ -38,10 +38,11 @@ class DataLoader(object):
     def create_tfdata_iter(self, filenames, fns_all_trn_data, batch_size, dir_bm_eyes, resolution, 
                            prob_random_color_match, use_da_motion_blur, use_bm_eyes):
         tf_fns = tf.constant(filenames, dtype=tf.string) # use tf_fns=filenames is also fine
-        dataset = tf.data.Dataset.from_tensor_slices(tf_fns) 
-        dataset = dataset.shuffle(len(filenames))
+        dataset = tf.data.Dataset.from_tensor_slices(tf_fns)
         dataset = dataset.apply(
-            tf.contrib.data.map_and_batch(
+            tf.data.experimental.shuffle_and_repeat(buffer_size=len(filenames)))
+        dataset = dataset.apply(
+            tf.data.experimental.map_and_batch(
                 lambda filenames: tf.py_func(
                     func=read_image, 
                     inp=[filenames, 
@@ -58,7 +59,6 @@ class DataLoader(object):
                 drop_remainder=True
             )
         )
-        dataset = dataset.repeat()
         dataset = dataset.prefetch(32)
 
         iterator = dataset.make_one_shot_iterator()
