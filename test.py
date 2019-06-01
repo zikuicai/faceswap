@@ -89,19 +89,6 @@ result_input_img = input_img.copy()
 result_input_img[int(x0):int(x1),int(y0):int(y1),:] = result_mask.astype(np.float32)/255*result_rgb +\
 (1-result_mask.astype(np.float32)/255)*result_input_img[int(x0):int(x1),int(y0):int(y1),:]
 
-# # Show result face
-# cv2.imshow('result face', result_input_img[int(x0):int(x1), int(y0):int(y1), :])
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
-# # Show transformed image before masking
-# cv2.imshow('transformed image', result_rgb)
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
-# # Show alpha mask
-# cv2.imshow('alpha mask', result_mask[..., 0])
-# cv2.waitKey(0)
-# cv2.destroyAllWindows()
-
 
 # Display interpolations before/after transformation
 def interpolate_imgs(im1, im2):

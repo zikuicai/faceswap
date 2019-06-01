@@ -135,6 +135,3 @@ def load_yaml(path_configs):
     with open(path_configs, 'r') as f:
          return yaml.load(f)        
 
-
-
-
