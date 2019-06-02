@@ -1,43 +1,28 @@
+import os
 import tensorflow as tf
 from .data_augmentation import read_image
 
+# Number of CPU cores, for parallelism
+num_cpus = os.cpu_count()
 
 class DataLoader(object):
-    def __init__(self, filenames, all_filenames, batch_size, dir_bm_eyes, 
-                 resolution, num_cpus, sess, **da_config):
+    def __init__(self, filenames, all_filenames, batch_size, resolution, sess):
         self.filenames = filenames
         self.all_filenames = all_filenames
         self.batch_size = batch_size
-        self.dir_bm_eyes = dir_bm_eyes
         self.resolution = resolution
         self.num_cpus = num_cpus
         self.sess = sess
         
-        self.set_data_augm_config(
-            da_config["prob_random_color_match"], 
-            da_config["use_da_motion_blur"], 
-            da_config["use_bm_eyes"])
-        
         self.data_iter_next = self.create_tfdata_iter(
             self.filenames, 
             self.all_filenames,
-            self.batch_size, 
-            self.dir_bm_eyes,
-            self.resolution,
-            self.prob_random_color_match,
-            self.use_da_motion_blur,
-            self.use_bm_eyes,
+            self.batch_size,
+            self.resolution
         )
         
-    def set_data_augm_config(self, prob_random_color_match=0.5, 
-                             use_da_motion_blur=True, use_bm_eyes=True):
-        self.prob_random_color_match = prob_random_color_match
-        self.use_da_motion_blur = use_da_motion_blur
-        self.use_bm_eyes = use_bm_eyes
-        
-    def create_tfdata_iter(self, filenames, fns_all_trn_data, batch_size, dir_bm_eyes, resolution, 
-                           prob_random_color_match, use_da_motion_blur, use_bm_eyes):
-        tf_fns = tf.constant(filenames, dtype=tf.string) # use tf_fns=filenames is also fine
+    def create_tfdata_iter(self, filenames, fns_all_trn_data, batch_size, resolution):
+        tf_fns = tf.constant(filenames, dtype=tf.string)
         dataset = tf.data.Dataset.from_tensor_slices(tf_fns)
         dataset = dataset.apply(
             tf.data.experimental.shuffle_and_repeat(buffer_size=len(filenames)))
@@ -46,12 +31,8 @@ class DataLoader(object):
                 lambda filenames: tf.py_func(
                     func=read_image, 
                     inp=[filenames, 
-                         fns_all_trn_data, 
-                         dir_bm_eyes, 
-                         resolution, 
-                         prob_random_color_match, 
-                         use_da_motion_blur, 
-                         use_bm_eyes], 
+                         fns_all_trn_data,
+                         resolution], 
                     Tout=[tf.float32, tf.float32, tf.float32]
                 ), 
                 batch_size=batch_size,

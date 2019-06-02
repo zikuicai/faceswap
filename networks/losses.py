@@ -1,5 +1,5 @@
 from keras.layers import Lambda, concatenate
-from tensorflow.contrib.distributions import Beta
+from tensorflow.distributions import Beta
 from .instance_normalization import InstanceNormalization
 import keras.backend as K
 import tensorflow as tf
@@ -12,24 +12,24 @@ def first_order(x, axis=1):
     elif axis == 2:
         return K.abs(x[:, :img_nrows - 1, :img_ncols - 1, :] - x[:, :img_nrows - 1, 1:, :])
     else:
-        return None   
+        return None
 
 def calc_loss(pred, target, loss='l2'):
-    if loss.lower() == "l2":
+    if loss == "l2":
         return K.mean(K.square(pred - target))
-    elif loss.lower() == "l1":
+    elif loss == "l1":
         return K.mean(K.abs(pred - target))
-    elif loss.lower() == "cross_entropy":
+    elif loss == "cross_entropy":
         return -K.mean(K.log(pred + K.epsilon())*target + K.log(1 - pred + K.epsilon())*(1 - target))
     else:
         raise ValueError(f'Recieve an unknown loss type: {loss}.')
     
 def cyclic_loss(netG1, netG2, real1):
     fake2 = netG2(real1)[-1] # fake2 ABGR
-    fake2_alpha = Lambda(lambda x: x[:,:,:, :1])(fake2) # fake2 BGR
+    fake2_alpha = Lambda(lambda x: x[:,:,:, :1])(fake2) # fake2 A
     fake2 = Lambda(lambda x: x[:,:,:, 1:])(fake2) # fake2 BGR
     cyclic1 = netG1(fake2)[-1] # cyclic1 ABGR
-    cyclic1_alpha = Lambda(lambda x: x[:,:,:, :1])(cyclic1) # cyclic1 BGR
+    cyclic1_alpha = Lambda(lambda x: x[:,:,:, :1])(cyclic1) # cyclic1 A
     cyclic1 = Lambda(lambda x: x[:,:,:, 1:])(cyclic1) # cyclic1 BGR
     loss = calc_loss(cyclic1, real1, loss='l1')
     loss += 0.1 * calc_loss(cyclic1_alpha, fake2_alpha, loss='l1')

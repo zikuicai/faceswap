@@ -306,27 +306,15 @@ class FaceswapGANModel():
             pass
     
     def train_one_batch_G(self, data_A, data_B):
-        if len(data_A) == 4 and len(data_B) == 4:
-            _, warped_A, target_A, bm_eyes_A = data_A
-            _, warped_B, target_B, bm_eyes_B = data_B
-        elif len(data_A) == 3 and len(data_B) == 3:
-            warped_A, target_A, bm_eyes_A = data_A
-            warped_B, target_B, bm_eyes_B = data_B
-        else:
-            raise ValueError("Something's wrong with the input data generator.")
+        warped_A, target_A, bm_eyes_A = data_A
+        warped_B, target_B, bm_eyes_B = data_B
         errGA = self.netGA_train([warped_A, target_A, bm_eyes_A])
         errGB = self.netGB_train([warped_B, target_B, bm_eyes_B])        
         return errGA, errGB
     
     def train_one_batch_D(self, data_A, data_B):
-        if len(data_A) == 4 and len(data_B) == 4:
-            _, warped_A, target_A, _ = data_A
-            _, warped_B, target_B, _ = data_B
-        elif len(data_A) == 3 and len(data_B) == 3:
-            warped_A, target_A, _ = data_A
-            warped_B, target_B, _ = data_B
-        else:
-            raise ValueError("Something's wrong with the input data generator.")
+        warped_A, target_A, _ = data_A
+        warped_B, target_B, _ = data_B
         errDA = self.netDA_train([warped_A, target_A])
         errDB = self.netDB_train([warped_B, target_B])
         return errDA, errDB
