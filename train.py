@@ -18,39 +18,20 @@ from keras_vggface.vggface import VGGFace
 
 # ----------------------------------------- config -----------------------------------------
 
-# Number of CPU cores, for parallelism
-num_cpus = os.cpu_count()
+
 # Input/Output resolution
 RESOLUTION = 64 # 64x64, 128x128, 256x256
 assert (RESOLUTION % 64) == 0, "RESOLUTION should be 64, 128, or 256."
 batchSize = 8
 assert (batchSize != 1 and batchSize % 2 == 0) , "batchSize should be an even number."
 
-# Use motion blurs (data augmentation)
-# set True if training data contains images extracted from videos
-use_da_motion_blur = True
-
-# Use eye-aware training
-# require images generated from prep_binary_masks.ipynb
-use_bm_eyes = True
-
-# Probability of random color matching (data augmentation)
-prob_random_color_match = 0.5
-
-da_config = {
-    "prob_random_color_match": prob_random_color_match,
-    "use_da_motion_blur": use_da_motion_blur,
-    "use_bm_eyes": use_bm_eyes
-}
 
 # Path to training images
 img_dirA = '../data/faces/faceA'
 img_dirB = '../data/faces/faceB'
-img_dirA_bm_eyes = "../data/binary_masks/faceA_eyes"
-img_dirB_bm_eyes = "../data/binary_masks/faceB_eyes"
 
 # Path to saved model weights
-models_dir = "./models"
+models_dir = "./models_1"
 results_dir = "./results"
 trans_dir = "./results/trans"
 masks_dir = "./results/masks"
@@ -100,18 +81,10 @@ assert len(train_B), "No image found in " + str(img_dirB)
 print ("Number of images in folder A: " + str(len(train_A)))
 print ("Number of images in folder B: " + str(len(train_B)))
 
-if use_bm_eyes:
-    assert len(glob.glob(img_dirA_bm_eyes+"/*.*")), "No binary mask found in " + str(img_dirA_bm_eyes)
-    assert len(glob.glob(img_dirB_bm_eyes+"/*.*")), "No binary mask found in " + str(img_dirB_bm_eyes)
-    assert len(glob.glob(img_dirA_bm_eyes+"/*.*")) == len(train_A), \
-    "Number of faceA images does not match number of their binary masks. Can be caused by any none image file in the folder."
-    assert len(glob.glob(img_dirB_bm_eyes+"/*.*")) == len(train_B), \
-    "Number of faceB images does not match number of their binary masks. Can be caused by any none image file in the folder."
 
-train_batchA = DataLoader(train_A, train_AnB, batchSize, img_dirA_bm_eyes, 
-                          RESOLUTION, num_cpus, K.get_session(), **da_config)
-train_batchB = DataLoader(train_B, train_AnB, batchSize, img_dirB_bm_eyes, 
-                          RESOLUTION, num_cpus, K.get_session(), **da_config)
+
+train_batchA = DataLoader(train_A, train_AnB, batchSize, RESOLUTION, K.get_session())
+train_batchB = DataLoader(train_B, train_AnB, batchSize, RESOLUTION, K.get_session())
 
 # ----------------------------------------- define models -----------------------------------------
 
@@ -145,9 +118,9 @@ for k in ['ttl', 'adv', 'recon', 'edge', 'pl']:
     errGAs[k] = 0
     errGBs[k] = 0
 
-display_iters = 300
-backup_iters = 5000
-TOTAL_ITERS = 40000
+display_iters = 200
+backup_iters = 2500
+TOTAL_ITERS = 10000
 step_count = 0
 
 
@@ -160,16 +133,16 @@ def reset_session(save_path):
     model.load_weights(path=save_path)
     vggface = VGGFace(include_top=False, model='resnet50', input_shape=(224, 224, 3))
     model.build_pl_model(vggface_model=vggface, before_activ=loss_config["PL_before_activ"])
-    train_batchA = DataLoader(train_A, train_AnB, batchSize, img_dirA_bm_eyes,
-                              RESOLUTION, num_cpus, K.get_session(), **da_config)
-    train_batchB = DataLoader(train_B, train_AnB, batchSize, img_dirB_bm_eyes, 
-                              RESOLUTION, num_cpus, K.get_session(), **da_config)
+    train_batchA = DataLoader(train_A, train_AnB, batchSize, RESOLUTION, K.get_session())
+    train_batchB = DataLoader(train_B, train_AnB, batchSize, RESOLUTION, K.get_session())
 
 
 def reconfig(stage):
+    # 7 stages
     m_mask = [0.0, 0.5, 0.2, 0.4, 0., 0.1, 0.0]
     use_mask_hinge_loss = [False, True, True, True, False, True, False]
     lr_factor = [1., 1., 1., 1., 0.3, 0.3, 0.1]
+    use_PL = [False, False, False, False, False, True, True]
 
     loss_config['use_PL'] = True
     loss_config['use_mask_hinge_loss'] = use_mask_hinge_loss[stage]
@@ -185,8 +158,8 @@ def reconfig(stage):
 
 while gen_iterations <= TOTAL_ITERS: 
     
-    if gen_iterations == 5:
-        print ("working.")
+    if gen_iterations <= 5:
+        print (f"iter: {gen_iterations} ...")
 
     # Loss function automation
     if gen_iterations == int(0.2*TOTAL_ITERS): reconfig(0)
