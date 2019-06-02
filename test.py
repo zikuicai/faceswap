@@ -3,7 +3,13 @@ from networks.faceswap_gan_model import FaceswapGANModel
 from detector.face_detector import MTCNNFaceDetector
 from converter.landmarks_alignment import *
 from converter.face_transformer import FaceTransformer
+import argparse
 
+parser = argparse.ArgumentParser()
+parser.add_argument('--input',type=str,help='the path of the input image',required=True)
+args = parser.parse_args()
+
+input_fn = args.input
 
 # Input/Output resolution
 RESOLUTION = 64  # 64x64, 128x128, 256x256
@@ -37,15 +43,12 @@ ftrans.set_model(model)
 
 
 # Read input image
-input_img = cv2.imread("./jack.png")[..., :3]
+input_img = cv2.imread(input_fn)[..., :3]
 
 if input_img.dtype == np.float32:
     print("input_img has dtype np.float32 (perhaps the image format is PNG). Scale it to uint8.")
     input_img = (input_img * 255).astype(np.uint8)
 
-# Display input image
-cv2.imshow('input_img', input_img)
-cv2.waitKey(1)
 
 # ----------------------------------------- detect face -----------------------------------------
 face, lms = fd.detect_face(input_img)
@@ -85,6 +88,7 @@ except:
     print("An error occured during face alignment.")
     pass
 
+
 result_input_img = input_img.copy()
 result_input_img[int(x0):int(x1),int(y0):int(y1),:] = result_mask.astype(np.float32)/255*result_rgb +\
 (1-result_mask.astype(np.float32)/255)*result_input_img[int(x0):int(x1),int(y0):int(y1),:]
@@ -97,8 +101,6 @@ def interpolate_imgs(im1, im2):
     out = map(np.uint8, out)
     return out
 
-
-# plt.figure(figsize=(15,8))
 cv2.imshow('final', np.hstack(interpolate_imgs(input_img, result_input_img)))
 cv2.waitKey(0)
 cv2.destroyAllWindows()
