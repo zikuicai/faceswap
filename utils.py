@@ -134,4 +134,3 @@ def save_preview_image(test_A, test_B,
 def load_yaml(path_configs):
     with open(path_configs, 'r') as f:
          return yaml.load(f)        
-
